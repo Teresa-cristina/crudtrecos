@@ -13,6 +13,9 @@
     <div class="item">
         <a href="{{ treco.t_foto }}" target="_blank"><img src="{{ treco.t_foto }}" alt="{{ treco.t_nome }}"></a>
         <div>
+            <a class="apaga" href="/apaga/{{ treco.t_id }}" onclick="return confirm('Term certeza que deseja apagar este treco?')">
+                <i class="fa-regular fa-trash-can fa-fw"></i>
+            </a>
             <h4>{{ treco.t_nome }}</h4>
             {{ treco.t_descricao }}
             <small>Local: {{ treco.t_localizacao }}</small>

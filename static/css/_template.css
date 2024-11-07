@@ -297,6 +297,7 @@ button {
 
 .item div {
     padding: .5rem;
+    flex-grow: 1;
 }
 
 .item h4 {
@@ -306,4 +307,28 @@ button {
 .item small {
     display: block;
     padding-top: .5rem;
+}
+
+#myDialog {
+    border: none;
+    border-radius: .3rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    width: 90%;
+    max-width: 300px;
+    margin: auto;
+    background-color: rgb(220, 255, 220);
+    font-size: 90%;
+}
+
+#myDialog h4 {
+    margin-top: 0;
+}
+
+#myDialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.apaga {
+    float: right;
 }
