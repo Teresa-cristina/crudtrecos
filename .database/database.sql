@@ -1,102 +1,294 @@
--- Apaga o banco de dados.
--- PERIGO! Só use isso em modo de desenvolvimento.
-DROP DATABASE IF EXISTS crudtrecos;
+# Importa as dependências do aplicativo
+from flask import Flask, g, make_response, redirect, render_template, request, url_for
+from flask_mysqldb import MySQL
+import json
+from functions.geral import datetime_para_string, remove_prefixo
 
--- Cria o banco de dados "novamente".
--- PERIGO! Só use isso em modo de desenvolvimento.
-CREATE DATABASE crudtrecos
-    -- Seleciona a tabela de caracteres UTF-8 (acentuação).
-    CHARACTER SET utf8mb4
-    -- Permite buscas case-insensitive (A=a, ç=c, ã=a).
-    COLLATE utf8mb4_unicode_ci;
+# Cria um aplicativo Flask chamado "app"
+app = Flask(__name__)
 
--- Seleciona o banco de dados
--- Todos comandos seguintes sejam para este banco de dados
-USE crudtrecos;
+# Configurações de acesso ao MySQL
+app.config['MYSQL_HOST'] = 'localhost'
+app.config['MYSQL_USER'] = 'root'
+app.config['MYSQL_PASSWORD'] = ''
+app.config['MYSQL_DB'] = 'crudtrecos'
 
--- Cria a tabela da entidade "usuario"
--- Prefixo dos atributos → u_
-CREATE TABLE usuario (
-    u_id INT PRIMARY KEY AUTO_INCREMENT,
-    u_data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    u_nome VARCHAR(127) NOT NULL,
-    u_nascimento DATE NOT NULL,
-    u_email VARCHAR(255) NOT NULL,
-    u_senha VARCHAR(63) NOT NULL,
-    u_status ENUM ('on', 'off', 'del') DEFAULT 'on'
-);
+# Setup da conexão com MySQL
+app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+app.config['MYSQL_USE_UNICODE'] = True
+app.config['MYSQL_CHARSET'] = 'utf8mb4'
 
--- Cria a tabela da entidade "treco"
--- Prefixo dos atributos → t_
-CREATE TABLE treco (
-    t_id INT PRIMARY KEY AUTO_INCREMENT,
-    t_data TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    t_foto VARCHAR(255),
-    t_usuario INT NOT NULL,
-    t_nome VARCHAR(127) NOT NULL,
-    t_descricao TEXT,
-    t_localizacao VARCHAR(255),
-    t_status ENUM ('on', 'off', 'del') DEFAULT 'on',
-    FOREIGN KEY (t_usuario) REFERENCES usuario(u_id)
-);
+# Variável de conexão com o MySQL
+mysql = MySQL(app)
 
--- -------------------------------------- --
--- Insere alguns dados "fake" nas tabelas --
--- -------------------------------------- --
 
--- Tabela 'usuario'
-INSERT INTO usuario (
-    u_nome,
-    u_nascimento,
-    u_email,
-    u_senha
-) VALUES (
-    'Joca da Silva',
-    '2000-04-25',
-    'jocasilva@email.com',
-    SHA1('Senha123') -- Criptografa a senha do usuário
-), (
-    'Marineuza Siriliano',
-    '2003-03-12',
-    'marineuza@email.com',
-    SHA1('Senha123')
-), (
-    'Setembrino Trocatapas',
-    '1998-12-14',
-    'setbrino@email.com',
-    SHA1('Senha123')
-);
+@app.before_request
+def start():
 
--- Tabela 'treco'
-INSERT INTO treco (
-    t_foto,
-    t_usuario,
-    t_nome,
-    t_descricao,
-    t_localizacao
-) VALUES ( 
-    'https://picsum.photos/200', 
-    '1', -- Id de um usuário existente
-    'Caneca de café do Elon Musk', 
-    'Uma caneca feia pra caracas que arrumei em algum lugar.', 
-    'Na estante da sala, prateleira de baixo.'
-), (
-    'https://picsum.photos/199',
-    '1',
-    'Caneca do Curintia',
-    'Cabem 300 ml, mas está com a alça quebrada e colada com superbondi.',
-    'Na estante da sala, prateleira do meio.'
-);
+    # Setup do MySQL para corrigir acentuação
+    cur = mysql.connection.cursor()
+    cur.execute("SET NAMES utf8mb4")
+    cur.execute("SET character_set_connection=utf8mb4")
+    cur.execute("SET character_set_client=utf8mb4")
+    cur.execute("SET character_set_results=utf8mb4")
 
--- Inserções da IA (veja o prompt no material da aula 11)
-INSERT INTO treco (t_foto, t_usuario, t_nome, t_descricao, t_localizacao) VALUES
-    ('https://picsum.photos/201', '1', 'Livro de Física Quântica', 'Um livro velho e empoeirado que encontrei na feira.', 'Na mesa do escritório, ao lado do laptop.'),
-    ('https://picsum.photos/202', '2', 'Câmera Polaroid', 'Uma câmera antiga, mas ainda funcional.', 'Na prateleira do quarto, junto às fotos antigas.'),
-    ('https://picsum.photos/203', '1', 'Relógio de Parede Vintage', 'Relógio com design clássico, não funciona mais.', 'Na parede da cozinha, ao lado do armário.'),
-    ('https://picsum.photos/204', '2', 'Guitarra Elétrica', 'Guitarra sem uma corda, mas ainda toca bem.', 'No canto da sala, perto do amplificador.'),
-    ('https://picsum.photos/205', '1', 'Bolsa de Couro', 'Bolsa de couro marrom, um pouco desgastada.', 'No guarda-roupa, pendurada ao lado dos casacos.'),
-    ('https://picsum.photos/206', '2', 'Vinil dos Beatles', 'Disco de vinil, edição original dos anos 60.', 'Na prateleira da sala, junto aos outros discos.'),
-    ('https://picsum.photos/207', '1', 'Óculos de Sol Ray-Ban', 'Óculos com uma lente riscada.', 'Na gaveta do armário, junto aos acessórios.'),
-    ('https://picsum.photos/208', '2', 'Estátua de Buda', 'Pequena estátua de Buda de madeira.', 'No altar da sala, cercada de velas.'),
-    ('https://picsum.photos/209', '1', 'Bola de Futebol Autografada', 'Bola autografada por um jogador famoso.', 'Na estante da sala, prateleira de cima.'),
-    ('https://picsum.photos/210', '2', 'Computador Retro', 'Computador antigo dos anos 80, ainda funcionando.', 'No escritório, em cima da mesa antiga.');
+    # Setup do MySQL para dias da semana e meses em português
+    cur.execute("SET lc_time_names = 'pt_BR'")
+
+    # Lê o cookie do usuário → 'usuario'
+    cookie = request.cookies.get('usuario')
+
+    if cookie:
+        # Se o cookie existe
+        # Converte o cookie JSON para um dicionário Python
+        g.usuario = json.loads(cookie)
+    else:
+        # Se o cookie não existe, a variável do ususário está vazia
+        g.usuario = ''
+
+    # # Cria um usuário "fake" para testes
+    # # No futuro, isso virá de um cookie
+    # g.usuario = {
+    #     'id': '1',
+    #     'nome': 'Joca da Silva',
+    #     'pnome': 'Joca',
+    # }
+
+
+@app.route("/")  # Rota raiz, equivalente a página inicial do site (index)
+def index():  # Função executada ao acessar a rota raiz
+
+    # Verifica se o usuário está logado → Pelo cookie
+    if g.usuario == '':
+        # Se o usuário não está logado
+        # Redireciona para a página de login
+        return redirect(url_for('login'))
+
+    acao = request.args.get('a')
+
+    # Um SQL de teste para exibir todos os 'trecos' do usuário conectado
+    sql = '''
+        SELECT t_id, t_foto, t_nome, t_descricao, t_localizacao 
+        FROM treco
+        WHERE t_usuario = %s 
+            AND t_status = 'on'
+        ORDER BY t_data DESC
+    '''
+    cur = mysql.connection.cursor()
+    cur.execute(sql, (g.usuario['id'],))
+    trecos = cur.fetchall()
+    cur.close()
+
+    # Teste de mesa para verificar o retorno dos dados do banco de dados
+    # print('\n\n\n', trecos, '\n\n\n')
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos',
+        'usuario': g.usuario,
+        'trecos': trecos,
+        'acao': acao
+    }
+
+    # Renderiza o template HTML, passando valores (pagina) para ele
+    return render_template('index.html', **pagina)
+
+
+# Rota para a página de cadastro de novo treco
+@app.route('/novo', methods=['GET', 'POST'])
+def novo():  # Função executada para cadastrar novo treco
+
+    # Variável que ativa a mensagem de sucesso no HTML
+    sucesso = False
+
+    # Se o formulário foi enviado
+    if request.method == 'POST':
+
+        # Obtém os dados preenchidos na forma de dicionário
+        form = dict(request.form)
+
+        # Teste de mesa (comente depois dos testes)
+        # Verifica se os dados do formulário chegaram ao back-end
+        # print('\n\n\n', form, '\n\n\n')
+
+        # Grava os dados no banco de dados
+        sql = '''
+            INSERT INTO treco (
+                t_usuario, t_foto, t_nome, t_descricao, t_localizacao
+            ) VALUES (%s, %s, %s, %s, %s)
+        '''
+        cur = mysql.connection.cursor()
+        cur.execute(sql, (
+            g.usuario['id'],
+            form['foto'],
+            form['nome'],
+            form['descricao'],
+            form['localizacao'],
+        ))
+        mysql.connection.commit()
+        cur.close()
+
+        sucesso = True
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos - Novo Treco',
+        'usuario': g.usuario,
+        'sucesso': sucesso,
+    }
+
+    # Renderiza o template HTML, passaod valores para ele
+    return render_template('novo.html', **pagina)
+
+
+@app.route('/login', methods=['GET', 'POST'])  # Rota para login de usuário
+def login():
+
+    erro = False
+
+    if request.method == 'POST':
+        # Se o formulário foi enviado
+
+        # Pega os dados preenchidos no formulário
+        form = dict(request.form)
+
+        # Pesquisa se os dados existem no banco de dados → usuario
+        # datetime.datetime(2024, 11, 8, 9, 23, 28)
+        sql = '''
+            SELECT *,
+                -- Gera uma versão das datas em pt-BR
+                DATE_FORMAT(u_data, '%%d/%%m/%%Y às %%H:%%m') AS u_databr,
+                DATE_FORMAT(u_nascimento, '%%d/%%m/%%Y') AS u_nascimentobr
+            FROM usuario
+            WHERE u_email = %s
+                AND u_senha = SHA1(%s)
+                AND u_status = 'on'
+        '''
+        cur = mysql.connection.cursor()
+        cur.execute(sql, (form['email'], form['senha'],))
+        usuario = cur.fetchone()
+        cur.close()
+
+        # Teste mesa
+        # print('\n\n\nDICT:', usuario, '\n\n\n')
+
+        if usuario == None:
+            # Se o usuário não foi encontrado
+            erro = True
+        else:
+            # Se achou o usuário
+            # Apaga a senha do usuário para salvar no cookie
+            del usuario['u_senha']
+
+            # Primeiro nome do usuário
+            usuario['u_pnome'] = usuario['u_nome'].split()[0]
+
+            # Formata as datas para usar no JSON
+            usuario = datetime_para_string(usuario)
+
+            # Remove o prefixo das chaves do dicionário
+            cookie_valor = remove_prefixo(usuario)
+
+            # Converte os dados em JSON (texto) para gravar no cookie
+            # Porque cookies só aceitam dados na forma de JSON
+            cookie_json = json.dumps(cookie_valor)
+
+            # Teste de mesa
+            # print('\n\n\nCOOKIE:', cookie_json, '\n\n\n')
+
+            # Prepara a página de destino → index
+            resposta = make_response(redirect(url_for('index')))
+
+            # Cria um cookie
+            resposta.set_cookie(
+                key='usuario',  # Nome do cookie
+                value=cookie_json,  # Valor a ser gravado no cookie
+                max_age=60 * 60 * 24 * 365  # Validade do cookie em segundos
+            )
+
+            # Redireciona para a página de destino → index
+            return resposta
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos - Login',
+        'erro': erro
+    }
+
+    return render_template('login.html', **pagina)
+
+
+@app.route('/cadastro', methods=['GET', 'POST'])  # Cadastro de usuário
+def cadastro():
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos - Cadastre-se',
+    }
+
+    return render_template('cadastro.html', **pagina)
+
+
+@app.route('/novasenha', methods=['GET', 'POST'])  # Pedido de senha de usuário
+def novasenha():
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos - Nova Senha'
+    }
+
+    return render_template('novasenha.html', **pagina)
+
+
+@app.route('/perfil')
+def perfil():
+
+    # Dados, variáveis e valores a serem passados para o template HTML
+    pagina = {
+        'titulo': 'CRUDTrecos - Novo Treco',
+        'usuario': g.usuario
+    }
+
+    # Renderiza o template HTML, passaod valores para ele
+    return render_template('perfil.html', **pagina)
+
+
+@app.route('/apaga/<id>')
+def apaga(id):
+
+    # (des)comente o método para apagar conforme o seu caso
+    # sql = 'DELETE FROM treco WHERE t_id = %s' # Apaga completamente o treco (CUIDADO!)
+    # Altera o status do treco para 'del'
+    sql = "UPDATE treco SET t_status = 'del'  WHERE t_id = %s"
+
+    # Executa o SQL
+    cur = mysql.connection.cursor()
+    cur.execute(sql, (id,))
+    mysql.connection.commit()
+    cur.close()
+
+    # Retorna para a página anterior
+    return redirect(url_for('index', a='apagado'))
+
+
+@app.route('/logout')
+def logout():
+
+    # Página de destino de logout
+    resposta = make_response(redirect(url_for('login')))
+
+    # apaga o cookie do usuário
+    resposta.set_cookie(
+        key='usuario',  # Nome do cookie
+        value='',  # Apara o valor do cookie
+        max_age=0  # A validade do cookie é ZERO
+    )
+
+    # Redireciona para login
+    return resposta
+
+
+# Executa o servidor HTTP se estiver no modo de desenvolvimento
+# Remova / comente essas linhas no modo de produção
+if __name__ == '__main__':
+    app.run(debug=True)
