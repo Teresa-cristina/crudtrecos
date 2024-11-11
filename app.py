@@ -2,7 +2,7 @@
 from flask import Flask, g, make_response, redirect, render_template, request, url_for
 from flask_mysqldb import MySQL
 import json
-from functions.geral import datetime_para_string, remove_prefixo
+from functions.geral import calcular_idade, datetime_para_string, remove_prefixo
 
 # Cria um aplicativo Flask chamado "app"
 app = Flask(__name__)
@@ -152,6 +152,9 @@ def login():
         # Pega os dados preenchidos no formulário
         form = dict(request.form)
 
+        # Teste mesa
+        # print('\n\n\nFORM:', form, '\n\n\n')
+
         # Pesquisa se os dados existem no banco de dados → usuario
         # datetime.datetime(2024, 11, 8, 9, 23, 28)
         sql = '''
@@ -243,10 +246,30 @@ def novasenha():
 @app.route('/perfil')
 def perfil():
 
+    # Calcula idade do usuário
+    g.usuario['idade'] = calcular_idade(g.usuario['nascimento'])
+
+    # Obtém a quantidade de trecos ativos os usuário
+    sql = '''
+        SELECT count(t_id) AS total 
+        FROM treco 
+        WHERE t_usuario = %s
+            AND t_status = 'on'
+    '''
+    cur = mysql.connection.cursor()
+    cur.execute(sql, (g.usuario['id'],))
+    row = cur.fetchone()
+    cur.close()
+
+    # Teste de mesa
+    # print('\n\n\n', row, '\n\n\n')
+
+    g.usuario['total'] = row['total']
+
     # Dados, variáveis e valores a serem passados para o template HTML
     pagina = {
         'titulo': 'CRUDTrecos - Novo Treco',
-        'usuario': g.usuario
+        'usuario': g.usuario,  # Dados do cookie do usuário
     }
 
     # Renderiza o template HTML, passaod valores para ele
@@ -286,6 +309,13 @@ def logout():
 
     # Redireciona para login
     return resposta
+
+
+@app.route('/apagausuario')
+def apagausuario():
+    # Apaga um usuário do sistema
+    # Também apaga todos os seus "trecos"
+    return 'foi'
 
 
 # Executa o servidor HTTP se estiver no modo de desenvolvimento
